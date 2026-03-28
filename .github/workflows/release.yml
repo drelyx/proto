@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RELEASE_TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Buf
+        uses: bufbuild/buf-action@v1
+        with:
+          version: "1.66.1"
+          github_token: ${{ github.token }}
+          setup_only: true
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Stamp release version into buf.yaml
+        run: python3 .github/scripts/update_buf_release_version.py "${RELEASE_TAG}"
+
+      - name: Regenerate SDKs
+        run: make generate
+
+      - name: Push release artifacts to default branch
+        run: |
+          if git diff --quiet -- buf.yaml gen; then
+            echo "No release artifact changes to push."
+            exit 0
+          fi
+
+          git fetch origin "${DEFAULT_BRANCH}":refs/remotes/origin/${DEFAULT_BRANCH} --force
+          git add buf.yaml gen
+          git commit -m "chore: prepare ${RELEASE_TAG} release artifacts"
+          git rebase "origin/${DEFAULT_BRANCH}"
+          git push origin HEAD:${DEFAULT_BRANCH}
+
+      - name: Package generated SDKs
+        run: |
+          mkdir -p dist
+          tar -czf "dist/drelyx-proto-go-${RELEASE_TAG}.tar.gz" gen/go
+          tar -czf "dist/drelyx-proto-ts-${RELEASE_TAG}.tar.gz" gen/ts
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" dist/*.tar.gz --clobber
+          else
+            gh release create "${RELEASE_TAG}" dist/*.tar.gz --generate-notes --verify-tag
+          fi

@@ -8,7 +8,6 @@ deps:
 generate:
 	rm -rf gen/go gen/ts
 	mkdir -p gen/go gen/ts
-	$(BUF) dep update
 	$(BUF) generate
 
 lint:

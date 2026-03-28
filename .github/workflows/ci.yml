@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Buf
+        uses: bufbuild/buf-action@v1
+        with:
+          version: "1.66.1"
+          github_token: ${{ github.token }}
+          setup_only: true
+
+      - name: Fetch main for breaking checks
+        if: github.event_name == 'pull_request'
+        run: git fetch origin main:refs/remotes/origin/main --force
+
+      - name: Buf lint
+        run: buf lint
+
+      - name: Buf breaking against main
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against '.git#branch=main'
+
+      - name: Buf breaking against previous main commit
+        if: github.event_name == 'push'
+        run: |
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            buf breaking --against '.git#ref=HEAD~1'
+          else
+            echo "Skipping breaking check because there is no previous commit on main."
+          fi
+
+      - name: Verify generated code is up to date
+        run: |
+          make generate
+          git diff --exit-code -- gen

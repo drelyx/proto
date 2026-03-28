@@ -46,7 +46,22 @@ Lint the schema:
 make lint
 ```
 
-`make generate` refreshes `buf.lock`, clears `gen/go` and `gen/ts`, and regenerates both SDK targets from the current schema.
+`make generate` clears `gen/go` and `gen/ts`, then regenerates both SDK targets from the current schema.
+
+Refresh dependency locks explicitly when needed:
+
+```bash
+make deps
+```
+
+`make deps` updates `buf.lock` from the current dependency graph.
+
+## CI and Releases
+
+GitHub Actions validate this repository in two stages:
+
+- `.github/workflows/ci.yml` runs `buf lint`, breaking-change detection, and a generated-code freshness check on pull requests and pushes to `main`.
+- `.github/workflows/release.yml` runs on tags matching `v*`, stamps the release tag into `buf.yaml`, regenerates SDKs, pushes release artifacts back to the default branch when needed, and creates a GitHub Release with generated notes plus packaged SDK archives.
 
 ## Go Usage
 
