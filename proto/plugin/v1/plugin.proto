@@ -1,0 +1,191 @@
+syntax = "proto3";
+
+package drelyx.plugin.v1;
+
+option go_package = "github.com/drelyx/proto/gen/go/plugin/v1;pluginv1";
+
+import "common/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// PluginService streams server events between the agent host and a sidecar plugin.
+service PluginService {
+  // OnEvent opens a long-lived bidirectional stream used for registration, events, and acknowledgements.
+  rpc OnEvent(stream PluginStreamMessage) returns (stream PluginStreamMessage);
+}
+
+// PluginEventType identifies the event families a plugin can subscribe to.
+enum PluginEventType {
+  // PLUGIN_EVENT_TYPE_UNSPECIFIED is used when no event type was provided.
+  PLUGIN_EVENT_TYPE_UNSPECIFIED = 0;
+  // PLUGIN_EVENT_TYPE_SERVER_START is emitted when a server transitions into starting or running.
+  PLUGIN_EVENT_TYPE_SERVER_START = 1;
+  // PLUGIN_EVENT_TYPE_SERVER_STOP is emitted when a server transitions into stopping or stopped.
+  PLUGIN_EVENT_TYPE_SERVER_STOP = 2;
+  // PLUGIN_EVENT_TYPE_PLAYER_JOIN is emitted when a player connects to a server.
+  PLUGIN_EVENT_TYPE_PLAYER_JOIN = 3;
+  // PLUGIN_EVENT_TYPE_PLAYER_LEAVE is emitted when a player disconnects from a server.
+  PLUGIN_EVENT_TYPE_PLAYER_LEAVE = 4;
+  // PLUGIN_EVENT_TYPE_CONSOLE_OUTPUT is emitted for console lines written by the server or agent.
+  PLUGIN_EVENT_TYPE_CONSOLE_OUTPUT = 5;
+}
+
+// PluginStreamMessage is the shared envelope used on the bidirectional plugin stream.
+message PluginStreamMessage {
+  reserved 100 to 199;
+
+  oneof payload {
+    // hello registers a plugin and declares the events it wants to receive.
+    PluginHello hello = 1;
+    // welcome confirms registration and communicates agent identity back to the plugin.
+    PluginWelcome welcome = 2;
+    // event carries one server event from the host to the plugin.
+    PluginEvent event = 3;
+    // ack confirms that a plugin received and handled a streamed event.
+    PluginAck ack = 4;
+    // shutdown asks the other side to close the stream gracefully.
+    PluginShutdown shutdown = 5;
+    // error communicates a structured stream-level failure.
+    PluginError error = 6;
+  }
+}
+
+// PluginHello identifies a plugin instance and the event subscriptions it wants.
+message PluginHello {
+  reserved 100 to 199;
+
+  // plugin_id is the stable UUID of the plugin instance.
+  string plugin_id = 1;
+  // name is the plugin display name used for logs and diagnostics.
+  string name = 2;
+  // version is the plugin build version.
+  string version = 3;
+  // subscriptions lists the event families the plugin wants to receive.
+  repeated PluginEventType subscriptions = 4;
+}
+
+// PluginWelcome confirms that the host accepted a plugin stream.
+message PluginWelcome {
+  reserved 100 to 199;
+
+  // stream_id is the host-generated identifier for the event stream session.
+  string stream_id = 1;
+  // agent identifies the agent instance hosting the plugin.
+  drelyx.common.v1.AgentInfo agent = 2;
+  // accepted_at records when the plugin registration was accepted.
+  google.protobuf.Timestamp accepted_at = 3;
+}
+
+// PluginEvent is the normalized event envelope delivered to plugins.
+message PluginEvent {
+  reserved 100 to 199;
+
+  // event_id is the stable UUID of the event.
+  string event_id = 1;
+  // server_id is the stable UUID of the affected server.
+  string server_id = 2;
+  // occurred_at records when the event happened on the agent.
+  google.protobuf.Timestamp occurred_at = 3;
+  // sequence is a monotonically increasing cursor scoped to the plugin stream.
+  uint64 sequence = 4;
+
+  oneof payload {
+    // server_start contains metadata for a server start event.
+    ServerStart server_start = 5;
+    // server_stop contains metadata for a server stop event.
+    ServerStop server_stop = 6;
+    // player_join contains metadata for a player join event.
+    PlayerJoin player_join = 7;
+    // player_leave contains metadata for a player leave event.
+    PlayerLeave player_leave = 8;
+    // console_output contains one console line observed by the agent.
+    ConsoleOutput console_output = 9;
+  }
+}
+
+// PluginAck confirms receipt of a streamed event.
+message PluginAck {
+  reserved 100 to 199;
+
+  // event_id is the stable UUID of the event being acknowledged.
+  string event_id = 1;
+  // plugin_id is the stable UUID of the plugin instance acknowledging the event.
+  string plugin_id = 2;
+  // received_at records when the plugin finished handling the event.
+  google.protobuf.Timestamp received_at = 3;
+}
+
+// PluginShutdown requests a graceful end to the plugin stream.
+message PluginShutdown {
+  reserved 100 to 199;
+
+  // reason is a human-readable explanation for why the stream is being closed.
+  string reason = 1;
+  // issued_at records when the shutdown request was emitted.
+  google.protobuf.Timestamp issued_at = 2;
+}
+
+// PluginError communicates a structured stream-level failure.
+message PluginError {
+  reserved 100 to 199;
+
+  // error contains the machine-readable and human-readable failure details.
+  drelyx.common.v1.Error error = 1;
+  // occurred_at records when the failure happened.
+  google.protobuf.Timestamp occurred_at = 2;
+}
+
+// ServerStart describes a server start event delivered to plugins.
+message ServerStart {
+  reserved 100 to 199;
+
+  // config is the resolved server configuration used for the start operation.
+  drelyx.common.v1.ServerConfig config = 1;
+  // state is the resulting lifecycle state observed after the start event.
+  drelyx.common.v1.ServerState state = 2;
+}
+
+// ServerStop describes a server stop event delivered to plugins.
+message ServerStop {
+  reserved 100 to 199;
+
+  // previous_state is the state the server was in before stopping.
+  drelyx.common.v1.ServerState previous_state = 1;
+  // current_state is the resulting lifecycle state after the stop event.
+  drelyx.common.v1.ServerState current_state = 2;
+  // reason is the host-supplied explanation for the stop.
+  string reason = 3;
+}
+
+// PlayerJoin describes a player connection observed by the agent.
+message PlayerJoin {
+  reserved 100 to 199;
+
+  // player_id is the stable UUID or provider identifier of the player.
+  string player_id = 1;
+  // username is the in-game player name observed by the agent.
+  string username = 2;
+  // remote_address is the client address reported by the game server when available.
+  string remote_address = 3;
+}
+
+// PlayerLeave describes a player disconnection observed by the agent.
+message PlayerLeave {
+  reserved 100 to 199;
+
+  // player_id is the stable UUID or provider identifier of the player.
+  string player_id = 1;
+  // username is the in-game player name observed by the agent.
+  string username = 2;
+  // reason contains an optional explanation for why the player disconnected.
+  string reason = 3;
+}
+
+// ConsoleOutput describes one console line observed by the agent.
+message ConsoleOutput {
+  reserved 100 to 199;
+
+  // stream identifies whether the line came from stdout, stderr, or the agent.
+  drelyx.common.v1.ConsoleStream stream = 1;
+  // line is the UTF-8 console output line delivered to the plugin.
+  string line = 2;
+}

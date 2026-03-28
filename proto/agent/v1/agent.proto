@@ -1,0 +1,560 @@
+syntax = "proto3";
+
+package drelyx.agent.v1;
+
+option go_package = "github.com/drelyx/proto/gen/go/agent/v1;agentv1";
+
+import "common/v1/types.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// ServerService controls the lifecycle of a managed game server.
+service ServerService {
+  // Start boots a stopped or crashed server using the provided configuration.
+  rpc Start(StartRequest) returns (ServerActionResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}:start"
+      body: "*"
+    };
+  }
+
+  // Stop requests a graceful shutdown of a running server.
+  rpc Stop(StopRequest) returns (ServerActionResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}:stop"
+      body: "*"
+    };
+  }
+
+  // Restart performs a graceful stop followed by a fresh start.
+  rpc Restart(RestartRequest) returns (ServerActionResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}:restart"
+      body: "*"
+    };
+  }
+
+  // Kill forcibly terminates the server process without graceful shutdown.
+  rpc Kill(KillRequest) returns (ServerActionResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}:kill"
+      body: "*"
+    };
+  }
+}
+
+// ConsoleService sends commands to and streams output from a server console.
+service ConsoleService {
+  // SendCommand writes a single command to the server console.
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}:command"
+      body: "*"
+    };
+  }
+
+  // StreamLogs streams historical and live console output.
+  rpc StreamLogs(StreamLogsRequest) returns (stream LogEntry) {
+    option (google.api.http) = {
+      get: "/v1/agents/servers/{server_id}/logs:stream"
+    };
+  }
+}
+
+// FileService manages server files and file transfers.
+service FileService {
+  // List enumerates files under a target path.
+  rpc List(ListFilesRequest) returns (ListFilesResponse) {
+    option (google.api.http) = {
+      get: "/v1/agents/servers/{server_id}/files"
+    };
+  }
+
+  // Read returns file contents from a target path.
+  rpc Read(ReadFileRequest) returns (ReadFileResponse) {
+    option (google.api.http) = {
+      get: "/v1/agents/servers/{server_id}/file:read"
+    };
+  }
+
+  // Write creates or overwrites file contents at a target path.
+  rpc Write(WriteFileRequest) returns (WriteFileResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}/file:write"
+      body: "*"
+    };
+  }
+
+  // Delete removes a file or directory from disk.
+  rpc Delete(DeleteFileRequest) returns (DeleteFileResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}/file:delete"
+      body: "*"
+    };
+  }
+
+  // Upload writes a binary payload to disk in one request.
+  rpc Upload(UploadFileRequest) returns (UploadFileResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents/servers/{server_id}/file:upload"
+      body: "*"
+    };
+  }
+
+  // Download returns a binary payload from disk in one response.
+  rpc Download(DownloadFileRequest) returns (DownloadFileResponse) {
+    option (google.api.http) = {
+      get: "/v1/agents/servers/{server_id}/file:download"
+    };
+  }
+}
+
+// MetricsService streams live resource metrics for a managed server.
+service MetricsService {
+  // StreamMetrics streams sampled resource usage for a server.
+  rpc StreamMetrics(StreamMetricsRequest) returns (stream MetricsSample) {
+    option (google.api.http) = {
+      get: "/v1/agents/servers/{server_id}/metrics:stream"
+    };
+  }
+}
+
+// StatusService exposes agent liveness and server status snapshots.
+service StatusService {
+  // Ping validates that the agent process is reachable.
+  rpc Ping(PingRequest) returns (PingResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents:ping"
+      body: "*"
+    };
+  }
+
+  // GetStatus returns the current status for one or more servers.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {
+    option (google.api.http) = {
+      post: "/v1/agents:status"
+      body: "*"
+    };
+  }
+}
+
+// FileEntryType classifies a filesystem node returned by FileService.List.
+enum FileEntryType {
+  // FILE_ENTRY_TYPE_UNSPECIFIED is used when the node type is unknown.
+  FILE_ENTRY_TYPE_UNSPECIFIED = 0;
+  // FILE_ENTRY_TYPE_FILE indicates a regular file.
+  FILE_ENTRY_TYPE_FILE = 1;
+  // FILE_ENTRY_TYPE_DIRECTORY indicates a directory.
+  FILE_ENTRY_TYPE_DIRECTORY = 2;
+  // FILE_ENTRY_TYPE_SYMLINK indicates a symbolic link.
+  FILE_ENTRY_TYPE_SYMLINK = 3;
+}
+
+// StartRequest identifies the server to start and the config it should use.
+message StartRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server to start.
+  string server_id = 1;
+  // request_id is the caller-generated correlation ID for this action.
+  string request_id = 2;
+  // config is the desired runtime configuration to apply before launch.
+  drelyx.common.v1.ServerConfig config = 3;
+  // attach_console requests the agent to begin tailing console output immediately.
+  bool attach_console = 4;
+}
+
+// StopRequest identifies the server to stop and the grace period to use.
+message StopRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server to stop.
+  string server_id = 1;
+  // request_id is the caller-generated correlation ID for this action.
+  string request_id = 2;
+  // grace_period_seconds is the time allowed for a clean shutdown before escalation.
+  uint32 grace_period_seconds = 3;
+}
+
+// RestartRequest identifies the server to restart and how long graceful stop may take.
+message RestartRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server to restart.
+  string server_id = 1;
+  // request_id is the caller-generated correlation ID for this action.
+  string request_id = 2;
+  // grace_period_seconds is the stop timeout before the agent forces a restart.
+  uint32 grace_period_seconds = 3;
+}
+
+// KillRequest identifies the server to terminate immediately.
+message KillRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server to kill.
+  string server_id = 1;
+  // request_id is the caller-generated correlation ID for this action.
+  string request_id = 2;
+}
+
+// ServerActionResponse reports the result of a lifecycle action.
+message ServerActionResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the affected server.
+  string server_id = 1;
+  // operation_id is the agent-generated identifier for the lifecycle operation.
+  string operation_id = 2;
+  // previous_state is the state observed before the action was accepted.
+  drelyx.common.v1.ServerState previous_state = 3;
+  // current_state is the latest state observed after action acceptance.
+  drelyx.common.v1.ServerState current_state = 4;
+  // accepted_at records when the agent accepted the action.
+  google.protobuf.Timestamp accepted_at = 5;
+  // error contains the reason the action could not be completed when applicable.
+  drelyx.common.v1.Error error = 6;
+}
+
+// SendCommandRequest writes a single console command to a running server.
+message SendCommandRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that will receive the command.
+  string server_id = 1;
+  // request_id is the caller-generated correlation ID for this command.
+  string request_id = 2;
+  // command is the literal command line sent to the server console.
+  string command = 3;
+}
+
+// SendCommandResponse reports whether a console command was accepted.
+message SendCommandResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the target server.
+  string server_id = 1;
+  // command echoes the command accepted by the agent.
+  string command = 2;
+  // accepted_at records when the command was written to the console.
+  google.protobuf.Timestamp accepted_at = 3;
+  // error contains the reason the command could not be written when applicable.
+  drelyx.common.v1.Error error = 4;
+}
+
+// StreamLogsRequest configures the historical window and stream options for log streaming.
+message StreamLogsRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server whose logs should be streamed.
+  string server_id = 1;
+  // tail_lines is the number of recent lines to replay before following live output.
+  uint32 tail_lines = 2;
+  // since replays only entries newer than the provided timestamp when set.
+  google.protobuf.Timestamp since = 3;
+  // include_system_messages controls whether agent lifecycle lines are included.
+  bool include_system_messages = 4;
+}
+
+// LogEntry contains one log record emitted by a server or the agent.
+message LogEntry {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that produced the log record.
+  string server_id = 1;
+  // sequence is a monotonically increasing cursor scoped to the server log stream.
+  uint64 sequence = 2;
+  // emitted_at records when the log record was produced.
+  google.protobuf.Timestamp emitted_at = 3;
+  // stream identifies whether the record came from stdout, stderr, or the agent.
+  drelyx.common.v1.ConsoleStream stream = 4;
+
+  oneof payload {
+    // text is the UTF-8 console line when the agent could decode the output.
+    string text = 5;
+    // raw is the original undecoded payload for binary or non-UTF-8 output.
+    bytes raw = 6;
+  }
+}
+
+// ListFilesRequest identifies the directory to enumerate.
+message ListFilesRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the filesystem.
+  string server_id = 1;
+  // path is the absolute or server-root-relative directory path to list.
+  string path = 2;
+  // recursive controls whether the agent should descend into subdirectories.
+  bool recursive = 3;
+  // include_hidden controls whether dotfiles should be returned.
+  bool include_hidden = 4;
+}
+
+// FileEntry describes one filesystem node under a managed server.
+message FileEntry {
+  reserved 100 to 199;
+
+  // path is the full path to the node within the server filesystem.
+  string path = 1;
+  // name is the last path segment of the node.
+  string name = 2;
+  // type classifies the node as a file, directory, or symlink.
+  FileEntryType type = 3;
+  // size_bytes is the node size in bytes when meaningful for the type.
+  uint64 size_bytes = 4;
+  // modified_at records the last modification time reported by the filesystem.
+  google.protobuf.Timestamp modified_at = 5;
+}
+
+// ListFilesResponse returns filesystem entries under the requested path.
+message ListFilesResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the filesystem.
+  string server_id = 1;
+  // path echoes the directory that was listed.
+  string path = 2;
+  // entries contains the files and directories discovered under the path.
+  repeated FileEntry entries = 3;
+  // error contains the reason the list operation failed when applicable.
+  drelyx.common.v1.Error error = 4;
+}
+
+// ReadFileRequest identifies the file to read and how much content to return.
+message ReadFileRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path is the absolute or server-root-relative file path to read.
+  string path = 2;
+  // offset is the byte offset to begin reading from.
+  uint64 offset = 3;
+  // max_bytes is the maximum number of bytes to return, or zero for the full file.
+  uint64 max_bytes = 4;
+  // prefer_text requests UTF-8 decoding when the content appears textual.
+  bool prefer_text = 5;
+}
+
+// ReadFileResponse returns file contents from a managed server.
+message ReadFileResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path echoes the file that was read.
+  string path = 2;
+  // size_bytes is the total size of the file on disk in bytes.
+  uint64 size_bytes = 3;
+  // modified_at records the last modification time of the file.
+  google.protobuf.Timestamp modified_at = 4;
+
+  oneof content {
+    // text contains UTF-8 decoded file contents when decoding succeeded.
+    string text = 5;
+    // raw contains the exact bytes returned by the read operation.
+    bytes raw = 6;
+  }
+
+  // error contains the reason the read operation failed when applicable.
+  drelyx.common.v1.Error error = 7;
+}
+
+// WriteFileRequest contains file contents to persist on disk.
+message WriteFileRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path is the absolute or server-root-relative file path to write.
+  string path = 2;
+
+  oneof content {
+    // text contains UTF-8 file contents to write.
+    string text = 3;
+    // raw contains the exact bytes to write to disk.
+    bytes raw = 4;
+  }
+
+  // append controls whether data is appended instead of replacing existing contents.
+  bool append = 5;
+  // create_parents controls whether missing parent directories are created.
+  bool create_parents = 6;
+}
+
+// WriteFileResponse reports the result of persisting file contents.
+message WriteFileResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path echoes the file that was written.
+  string path = 2;
+  // bytes_written is the number of bytes persisted by the operation.
+  uint64 bytes_written = 3;
+  // modified_at records the resulting modification time of the file.
+  google.protobuf.Timestamp modified_at = 4;
+  // error contains the reason the write operation failed when applicable.
+  drelyx.common.v1.Error error = 5;
+}
+
+// DeleteFileRequest identifies a file or directory to remove.
+message DeleteFileRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the path.
+  string server_id = 1;
+  // path is the absolute or server-root-relative path to delete.
+  string path = 2;
+  // recursive controls whether non-empty directories may be removed.
+  bool recursive = 3;
+}
+
+// DeleteFileResponse reports the result of deleting a path.
+message DeleteFileResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owned the deleted path.
+  string server_id = 1;
+  // path echoes the path that was deleted.
+  string path = 2;
+  // deleted_at records when the deletion completed.
+  google.protobuf.Timestamp deleted_at = 3;
+  // error contains the reason the delete operation failed when applicable.
+  drelyx.common.v1.Error error = 4;
+}
+
+// UploadFileRequest contains a complete binary payload to write to disk.
+message UploadFileRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the destination path.
+  string server_id = 1;
+  // path is the absolute or server-root-relative destination path.
+  string path = 2;
+  // contents is the binary payload that should be written to disk.
+  bytes contents = 3;
+  // overwrite controls whether an existing file may be replaced.
+  bool overwrite = 4;
+  // create_parents controls whether missing parent directories are created.
+  bool create_parents = 5;
+  // content_type is the caller-supplied MIME type of the uploaded payload.
+  string content_type = 6;
+}
+
+// UploadFileResponse reports the result of writing a binary payload.
+message UploadFileResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the destination path.
+  string server_id = 1;
+  // path echoes the file that was uploaded.
+  string path = 2;
+  // size_bytes is the number of bytes persisted on disk.
+  uint64 size_bytes = 3;
+  // uploaded_at records when the upload completed.
+  google.protobuf.Timestamp uploaded_at = 4;
+  // error contains the reason the upload failed when applicable.
+  drelyx.common.v1.Error error = 5;
+}
+
+// DownloadFileRequest identifies the binary payload to fetch from disk.
+message DownloadFileRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path is the absolute or server-root-relative file path to download.
+  string path = 2;
+}
+
+// DownloadFileResponse returns a complete binary payload from disk.
+message DownloadFileResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server that owns the file.
+  string server_id = 1;
+  // path echoes the downloaded file path.
+  string path = 2;
+  // contents is the binary payload returned from disk.
+  bytes contents = 3;
+  // content_type is the agent-detected or caller-supplied MIME type of the file.
+  string content_type = 4;
+  // modified_at records the last modification time of the file.
+  google.protobuf.Timestamp modified_at = 5;
+  // error contains the reason the download failed when applicable.
+  drelyx.common.v1.Error error = 6;
+}
+
+// StreamMetricsRequest configures the sample cadence for live metrics.
+message StreamMetricsRequest {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server whose metrics should be streamed.
+  string server_id = 1;
+  // interval_seconds is the desired sample period for successive metrics.
+  uint32 interval_seconds = 2;
+}
+
+// MetricsSample contains one resource-usage sample for a server.
+message MetricsSample {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the server being measured.
+  string server_id = 1;
+  // observed_at records when the sample was captured.
+  google.protobuf.Timestamp observed_at = 2;
+  // state is the lifecycle state of the server at sample time.
+  drelyx.common.v1.ServerState state = 3;
+  // usage contains the measured resource totals for the server.
+  drelyx.common.v1.ResourceUsage usage = 4;
+}
+
+// PingRequest allows the panel to verify basic agent liveness.
+message PingRequest {
+  reserved 100 to 199;
+
+  // request_id is the caller-generated correlation ID for the liveness probe.
+  string request_id = 1;
+  // sent_at records when the panel emitted the probe.
+  google.protobuf.Timestamp sent_at = 2;
+}
+
+// PingResponse returns basic agent identity and echo timing.
+message PingResponse {
+  reserved 100 to 199;
+
+  // agent identifies the agent instance that answered the probe.
+  drelyx.common.v1.AgentInfo agent = 1;
+  // request_id echoes the caller-generated correlation ID from the request.
+  string request_id = 2;
+  // sent_at echoes when the caller emitted the probe.
+  google.protobuf.Timestamp sent_at = 3;
+  // received_at records when the agent received and handled the probe.
+  google.protobuf.Timestamp received_at = 4;
+}
+
+// GetStatusRequest identifies which servers should be included in the status snapshot.
+message GetStatusRequest {
+  reserved 100 to 199;
+
+  // server_ids filters the response to a subset of managed servers when provided.
+  repeated string server_ids = 1;
+  // include_usage controls whether the agent should populate the usage field in statuses.
+  bool include_usage = 2;
+}
+
+// GetStatusResponse returns a batch status snapshot for managed servers.
+message GetStatusResponse {
+  reserved 100 to 199;
+
+  // agent identifies the agent that produced the snapshot.
+  drelyx.common.v1.AgentInfo agent = 1;
+  // reported_at records when the snapshot was generated.
+  google.protobuf.Timestamp reported_at = 2;
+  // statuses contains one status summary per matching server.
+  repeated drelyx.common.v1.ServerStatus statuses = 3;
+  // error contains a top-level failure when the snapshot could not be produced.
+  drelyx.common.v1.Error error = 4;
+}

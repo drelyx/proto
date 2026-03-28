@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package drelyx.panel.v1;
+
+option go_package = "github.com/drelyx/proto/gen/go/panel/v1;panelv1";
+
+import "common/v1/types.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// ReportService is called by agents to push telemetry and lifecycle events back to the panel.
+service ReportService {
+  // ReportMetrics pushes a point-in-time usage sample to the panel.
+  rpc ReportMetrics(ReportMetricsRequest) returns (ReportAck) {
+    option (google.api.http) = {
+      post: "/v1/panel/reports/metrics"
+      body: "*"
+    };
+  }
+
+  // ReportEvent pushes a lifecycle, player, or console event to the panel.
+  rpc ReportEvent(ReportEventRequest) returns (ReportAck) {
+    option (google.api.http) = {
+      post: "/v1/panel/reports/events"
+      body: "*"
+    };
+  }
+
+  // ReportCrash pushes crash details for an unexpectedly terminated server.
+  rpc ReportCrash(ReportCrashRequest) returns (ReportAck) {
+    option (google.api.http) = {
+      post: "/v1/panel/reports/crashes"
+      body: "*"
+    };
+  }
+}
+
+// ReportAck confirms that the panel received and handled a report.
+message ReportAck {
+  reserved 100 to 199;
+
+  // ack_id is the panel-generated identifier for the persisted report.
+  string ack_id = 1;
+  // received_at records when the panel accepted the report.
+  google.protobuf.Timestamp received_at = 2;
+  // error contains the reason the report could not be accepted when applicable.
+  drelyx.common.v1.Error error = 3;
+}
+
+// ReportMetricsRequest carries one metrics sample from an agent to the panel.
+message ReportMetricsRequest {
+  reserved 100 to 199;
+
+  // agent identifies the reporting agent instance.
+  drelyx.common.v1.AgentInfo agent = 1;
+  // server_id is the stable UUID of the server being reported.
+  string server_id = 2;
+  // observed_at records when the sample was captured on the agent.
+  google.protobuf.Timestamp observed_at = 3;
+  // state is the lifecycle state of the server at sample time.
+  drelyx.common.v1.ServerState state = 4;
+  // usage contains the measured resource totals for the server.
+  drelyx.common.v1.ResourceUsage usage = 5;
+}
+
+// ReportEventRequest carries a structured server event from an agent to the panel.
+message ReportEventRequest {
+  reserved 100 to 199;
+
+  // agent identifies the agent that observed the event.
+  drelyx.common.v1.AgentInfo agent = 1;
+  // event contains the structured payload for the reported event.
+  PanelEvent event = 2;
+}
+
+// ReportCrashRequest carries crash details for a server that exited unexpectedly.
+message ReportCrashRequest {
+  reserved 100 to 199;
+
+  // agent identifies the agent that observed the crash.
+  drelyx.common.v1.AgentInfo agent = 1;
+  // crash contains structured crash metadata and recent log context.
+  CrashReport crash = 2;
+}
+
+// PanelEvent is a normalized event envelope sent from agents to the panel.
+message PanelEvent {
+  reserved 100 to 199;
+
+  // event_id is the stable UUID of the event.
+  string event_id = 1;
+  // server_id is the stable UUID of the affected server.
+  string server_id = 2;
+  // occurred_at records when the event happened on the agent.
+  google.protobuf.Timestamp occurred_at = 3;
+
+  oneof payload {
+    // lifecycle contains a state transition such as starting or stopping.
+    LifecycleEvent lifecycle = 4;
+    // console_output contains one line emitted by the server console.
+    ConsoleEvent console_output = 5;
+    // player_join contains a player connection event.
+    PlayerEvent player_join = 6;
+    // player_leave contains a player disconnection event.
+    PlayerEvent player_leave = 7;
+  }
+}
+
+// LifecycleEvent describes a server state transition.
+message LifecycleEvent {
+  reserved 100 to 199;
+
+  // previous_state is the state before the transition started.
+  drelyx.common.v1.ServerState previous_state = 1;
+  // current_state is the new state after the transition.
+  drelyx.common.v1.ServerState current_state = 2;
+  // reason is the agent-supplied explanation for the transition.
+  string reason = 3;
+}
+
+// ConsoleEvent describes one console line observed by an agent.
+message ConsoleEvent {
+  reserved 100 to 199;
+
+  // stream identifies whether the line came from stdout, stderr, or the agent.
+  drelyx.common.v1.ConsoleStream stream = 1;
+  // line is the UTF-8 console output line that should be persisted.
+  string line = 2;
+}
+
+// PlayerEvent describes one player joining or leaving a server.
+message PlayerEvent {
+  reserved 100 to 199;
+
+  // player_id is the stable UUID or provider identifier of the player.
+  string player_id = 1;
+  // username is the in-game player name observed by the agent.
+  string username = 2;
+  // remote_address is the client address reported by the game server when available.
+  string remote_address = 3;
+  // reason contains an optional free-form explanation for disconnect events.
+  string reason = 4;
+}
+
+// CrashReport describes an unexpected server termination.
+message CrashReport {
+  reserved 100 to 199;
+
+  // report_id is the stable UUID of the crash report.
+  string report_id = 1;
+  // server_id is the stable UUID of the crashed server.
+  string server_id = 2;
+  // occurred_at records when the crash was observed.
+  google.protobuf.Timestamp occurred_at = 3;
+
+  oneof termination {
+    // exit_code is the process exit code when the server exited normally but unexpectedly.
+    int32 exit_code = 4;
+    // signal is the signal name when the process was terminated by the host.
+    string signal = 5;
+  }
+
+  // reason is the agent-supplied crash summary.
+  string reason = 6;
+  // usage captures the last known resource sample before the crash.
+  drelyx.common.v1.ResourceUsage usage = 7;
+  // recent_logs contains the most recent console lines leading up to the crash.
+  repeated string recent_logs = 8;
+}
