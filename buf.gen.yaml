@@ -1,0 +1,31 @@
+version: v2
+
+inputs:
+  - directory: proto
+
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.35.2
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc/go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc-ecosystem/gateway:v2.16.2
+    out: gen/go
+    opt:
+      - paths=source_relative
+      - generate_unbound_methods=true
+    types:
+      - drelyx.agent.v1.ServerService
+      - drelyx.agent.v1.ConsoleService
+      - drelyx.agent.v1.FileService
+      - drelyx.agent.v1.MetricsService
+      - drelyx.agent.v1.StatusService
+      - drelyx.panel.v1.ReportService
+  - remote: buf.build/bufbuild/es
+    out: gen/ts
+    opt:
+      - target=ts
+      - import_extension=none

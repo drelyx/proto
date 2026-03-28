@@ -10,7 +10,7 @@ import "google/protobuf/timestamp.proto";
 // PluginService streams server events between the agent host and a sidecar plugin.
 service PluginService {
   // OnEvent opens a long-lived bidirectional stream used for registration, events, and acknowledgements.
-  rpc OnEvent(stream PluginStreamMessage) returns (stream PluginStreamMessage);
+  rpc OnEvent(stream OnEventRequest) returns (stream OnEventResponse);
 }
 
 // PluginEventType identifies the event families a plugin can subscribe to.
@@ -29,23 +29,33 @@ enum PluginEventType {
   PLUGIN_EVENT_TYPE_CONSOLE_OUTPUT = 5;
 }
 
-// PluginStreamMessage is the shared envelope used on the bidirectional plugin stream.
-message PluginStreamMessage {
+// OnEventRequest is a client-to-host message on the plugin event stream.
+message OnEventRequest {
   reserved 100 to 199;
 
   oneof payload {
     // hello registers a plugin and declares the events it wants to receive.
     PluginHello hello = 1;
-    // welcome confirms registration and communicates agent identity back to the plugin.
-    PluginWelcome welcome = 2;
-    // event carries one server event from the host to the plugin.
-    PluginEvent event = 3;
     // ack confirms that a plugin received and handled a streamed event.
-    PluginAck ack = 4;
-    // shutdown asks the other side to close the stream gracefully.
-    PluginShutdown shutdown = 5;
+    PluginAck ack = 2;
     // error communicates a structured stream-level failure.
-    PluginError error = 6;
+    PluginError error = 3;
+  }
+}
+
+// OnEventResponse is a host-to-client message on the plugin event stream.
+message OnEventResponse {
+  reserved 100 to 199;
+
+  oneof payload {
+    // welcome confirms registration and communicates agent identity back to the plugin.
+    PluginWelcome welcome = 1;
+    // event carries one server event from the host to the plugin.
+    PluginEvent event = 2;
+    // shutdown asks the other side to close the stream gracefully.
+    PluginShutdown shutdown = 3;
+    // error communicates a structured stream-level failure.
+    PluginError error = 4;
   }
 }
 

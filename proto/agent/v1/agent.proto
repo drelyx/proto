@@ -11,7 +11,7 @@ import "google/protobuf/timestamp.proto";
 // ServerService controls the lifecycle of a managed game server.
 service ServerService {
   // Start boots a stopped or crashed server using the provided configuration.
-  rpc Start(StartRequest) returns (ServerActionResponse) {
+  rpc Start(StartRequest) returns (StartResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}:start"
       body: "*"
@@ -19,7 +19,7 @@ service ServerService {
   }
 
   // Stop requests a graceful shutdown of a running server.
-  rpc Stop(StopRequest) returns (ServerActionResponse) {
+  rpc Stop(StopRequest) returns (StopResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}:stop"
       body: "*"
@@ -27,7 +27,7 @@ service ServerService {
   }
 
   // Restart performs a graceful stop followed by a fresh start.
-  rpc Restart(RestartRequest) returns (ServerActionResponse) {
+  rpc Restart(RestartRequest) returns (RestartResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}:restart"
       body: "*"
@@ -35,7 +35,7 @@ service ServerService {
   }
 
   // Kill forcibly terminates the server process without graceful shutdown.
-  rpc Kill(KillRequest) returns (ServerActionResponse) {
+  rpc Kill(KillRequest) returns (KillResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}:kill"
       body: "*"
@@ -54,7 +54,7 @@ service ConsoleService {
   }
 
   // StreamLogs streams historical and live console output.
-  rpc StreamLogs(StreamLogsRequest) returns (stream LogEntry) {
+  rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse) {
     option (google.api.http) = {
       get: "/v1/agents/servers/{server_id}/logs:stream"
     };
@@ -64,21 +64,21 @@ service ConsoleService {
 // FileService manages server files and file transfers.
 service FileService {
   // List enumerates files under a target path.
-  rpc List(ListFilesRequest) returns (ListFilesResponse) {
+  rpc List(ListRequest) returns (ListResponse) {
     option (google.api.http) = {
       get: "/v1/agents/servers/{server_id}/files"
     };
   }
 
   // Read returns file contents from a target path.
-  rpc Read(ReadFileRequest) returns (ReadFileResponse) {
+  rpc Read(ReadRequest) returns (ReadResponse) {
     option (google.api.http) = {
       get: "/v1/agents/servers/{server_id}/file:read"
     };
   }
 
   // Write creates or overwrites file contents at a target path.
-  rpc Write(WriteFileRequest) returns (WriteFileResponse) {
+  rpc Write(WriteRequest) returns (WriteResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}/file:write"
       body: "*"
@@ -86,7 +86,7 @@ service FileService {
   }
 
   // Delete removes a file or directory from disk.
-  rpc Delete(DeleteFileRequest) returns (DeleteFileResponse) {
+  rpc Delete(DeleteRequest) returns (DeleteResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}/file:delete"
       body: "*"
@@ -94,7 +94,7 @@ service FileService {
   }
 
   // Upload writes a binary payload to disk in one request.
-  rpc Upload(UploadFileRequest) returns (UploadFileResponse) {
+  rpc Upload(UploadRequest) returns (UploadResponse) {
     option (google.api.http) = {
       post: "/v1/agents/servers/{server_id}/file:upload"
       body: "*"
@@ -102,7 +102,7 @@ service FileService {
   }
 
   // Download returns a binary payload from disk in one response.
-  rpc Download(DownloadFileRequest) returns (DownloadFileResponse) {
+  rpc Download(DownloadRequest) returns (DownloadResponse) {
     option (google.api.http) = {
       get: "/v1/agents/servers/{server_id}/file:download"
     };
@@ -112,7 +112,7 @@ service FileService {
 // MetricsService streams live resource metrics for a managed server.
 service MetricsService {
   // StreamMetrics streams sampled resource usage for a server.
-  rpc StreamMetrics(StreamMetricsRequest) returns (stream MetricsSample) {
+  rpc StreamMetrics(StreamMetricsRequest) returns (stream StreamMetricsResponse) {
     option (google.api.http) = {
       get: "/v1/agents/servers/{server_id}/metrics:stream"
     };
@@ -164,6 +164,24 @@ message StartRequest {
   bool attach_console = 4;
 }
 
+// StartResponse reports the result of a start request.
+message StartResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the affected server.
+  string server_id = 1;
+  // operation_id is the agent-generated identifier for the lifecycle operation.
+  string operation_id = 2;
+  // previous_state is the state observed before the action was accepted.
+  drelyx.common.v1.ServerState previous_state = 3;
+  // current_state is the latest state observed after action acceptance.
+  drelyx.common.v1.ServerState current_state = 4;
+  // accepted_at records when the agent accepted the action.
+  google.protobuf.Timestamp accepted_at = 5;
+  // error contains the reason the action could not be completed when applicable.
+  drelyx.common.v1.Error error = 6;
+}
+
 // StopRequest identifies the server to stop and the grace period to use.
 message StopRequest {
   reserved 100 to 199;
@@ -174,6 +192,24 @@ message StopRequest {
   string request_id = 2;
   // grace_period_seconds is the time allowed for a clean shutdown before escalation.
   uint32 grace_period_seconds = 3;
+}
+
+// StopResponse reports the result of a stop request.
+message StopResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the affected server.
+  string server_id = 1;
+  // operation_id is the agent-generated identifier for the lifecycle operation.
+  string operation_id = 2;
+  // previous_state is the state observed before the action was accepted.
+  drelyx.common.v1.ServerState previous_state = 3;
+  // current_state is the latest state observed after action acceptance.
+  drelyx.common.v1.ServerState current_state = 4;
+  // accepted_at records when the agent accepted the action.
+  google.protobuf.Timestamp accepted_at = 5;
+  // error contains the reason the action could not be completed when applicable.
+  drelyx.common.v1.Error error = 6;
 }
 
 // RestartRequest identifies the server to restart and how long graceful stop may take.
@@ -188,6 +224,24 @@ message RestartRequest {
   uint32 grace_period_seconds = 3;
 }
 
+// RestartResponse reports the result of a restart request.
+message RestartResponse {
+  reserved 100 to 199;
+
+  // server_id is the stable UUID of the affected server.
+  string server_id = 1;
+  // operation_id is the agent-generated identifier for the lifecycle operation.
+  string operation_id = 2;
+  // previous_state is the state observed before the action was accepted.
+  drelyx.common.v1.ServerState previous_state = 3;
+  // current_state is the latest state observed after action acceptance.
+  drelyx.common.v1.ServerState current_state = 4;
+  // accepted_at records when the agent accepted the action.
+  google.protobuf.Timestamp accepted_at = 5;
+  // error contains the reason the action could not be completed when applicable.
+  drelyx.common.v1.Error error = 6;
+}
+
 // KillRequest identifies the server to terminate immediately.
 message KillRequest {
   reserved 100 to 199;
@@ -198,8 +252,8 @@ message KillRequest {
   string request_id = 2;
 }
 
-// ServerActionResponse reports the result of a lifecycle action.
-message ServerActionResponse {
+// KillResponse reports the result of a kill request.
+message KillResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the affected server.
@@ -256,8 +310,8 @@ message StreamLogsRequest {
   bool include_system_messages = 4;
 }
 
-// LogEntry contains one log record emitted by a server or the agent.
-message LogEntry {
+// StreamLogsResponse contains one log record emitted by a server or the agent.
+message StreamLogsResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that produced the log record.
@@ -277,8 +331,8 @@ message LogEntry {
   }
 }
 
-// ListFilesRequest identifies the directory to enumerate.
-message ListFilesRequest {
+// ListRequest identifies the directory to enumerate.
+message ListRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the filesystem.
@@ -307,8 +361,8 @@ message FileEntry {
   google.protobuf.Timestamp modified_at = 5;
 }
 
-// ListFilesResponse returns filesystem entries under the requested path.
-message ListFilesResponse {
+// ListResponse returns filesystem entries under the requested path.
+message ListResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the filesystem.
@@ -321,8 +375,8 @@ message ListFilesResponse {
   drelyx.common.v1.Error error = 4;
 }
 
-// ReadFileRequest identifies the file to read and how much content to return.
-message ReadFileRequest {
+// ReadRequest identifies the file to read and how much content to return.
+message ReadRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -337,8 +391,8 @@ message ReadFileRequest {
   bool prefer_text = 5;
 }
 
-// ReadFileResponse returns file contents from a managed server.
-message ReadFileResponse {
+// ReadResponse returns file contents from a managed server.
+message ReadResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -361,8 +415,8 @@ message ReadFileResponse {
   drelyx.common.v1.Error error = 7;
 }
 
-// WriteFileRequest contains file contents to persist on disk.
-message WriteFileRequest {
+// WriteRequest contains file contents to persist on disk.
+message WriteRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -383,8 +437,8 @@ message WriteFileRequest {
   bool create_parents = 6;
 }
 
-// WriteFileResponse reports the result of persisting file contents.
-message WriteFileResponse {
+// WriteResponse reports the result of persisting file contents.
+message WriteResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -399,8 +453,8 @@ message WriteFileResponse {
   drelyx.common.v1.Error error = 5;
 }
 
-// DeleteFileRequest identifies a file or directory to remove.
-message DeleteFileRequest {
+// DeleteRequest identifies a file or directory to remove.
+message DeleteRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the path.
@@ -411,8 +465,8 @@ message DeleteFileRequest {
   bool recursive = 3;
 }
 
-// DeleteFileResponse reports the result of deleting a path.
-message DeleteFileResponse {
+// DeleteResponse reports the result of deleting a path.
+message DeleteResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owned the deleted path.
@@ -425,8 +479,8 @@ message DeleteFileResponse {
   drelyx.common.v1.Error error = 4;
 }
 
-// UploadFileRequest contains a complete binary payload to write to disk.
-message UploadFileRequest {
+// UploadRequest contains a complete binary payload to write to disk.
+message UploadRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the destination path.
@@ -443,8 +497,8 @@ message UploadFileRequest {
   string content_type = 6;
 }
 
-// UploadFileResponse reports the result of writing a binary payload.
-message UploadFileResponse {
+// UploadResponse reports the result of writing a binary payload.
+message UploadResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the destination path.
@@ -459,8 +513,8 @@ message UploadFileResponse {
   drelyx.common.v1.Error error = 5;
 }
 
-// DownloadFileRequest identifies the binary payload to fetch from disk.
-message DownloadFileRequest {
+// DownloadRequest identifies the binary payload to fetch from disk.
+message DownloadRequest {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -469,8 +523,8 @@ message DownloadFileRequest {
   string path = 2;
 }
 
-// DownloadFileResponse returns a complete binary payload from disk.
-message DownloadFileResponse {
+// DownloadResponse returns a complete binary payload from disk.
+message DownloadResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server that owns the file.
@@ -497,8 +551,8 @@ message StreamMetricsRequest {
   uint32 interval_seconds = 2;
 }
 
-// MetricsSample contains one resource-usage sample for a server.
-message MetricsSample {
+// StreamMetricsResponse contains one resource-usage sample for a server.
+message StreamMetricsResponse {
   reserved 100 to 199;
 
   // server_id is the stable UUID of the server being measured.

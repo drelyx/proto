@@ -11,7 +11,7 @@ import "google/protobuf/timestamp.proto";
 // ReportService is called by agents to push telemetry and lifecycle events back to the panel.
 service ReportService {
   // ReportMetrics pushes a point-in-time usage sample to the panel.
-  rpc ReportMetrics(ReportMetricsRequest) returns (ReportAck) {
+  rpc ReportMetrics(ReportMetricsRequest) returns (ReportMetricsResponse) {
     option (google.api.http) = {
       post: "/v1/panel/reports/metrics"
       body: "*"
@@ -19,7 +19,7 @@ service ReportService {
   }
 
   // ReportEvent pushes a lifecycle, player, or console event to the panel.
-  rpc ReportEvent(ReportEventRequest) returns (ReportAck) {
+  rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse) {
     option (google.api.http) = {
       post: "/v1/panel/reports/events"
       body: "*"
@@ -27,24 +27,12 @@ service ReportService {
   }
 
   // ReportCrash pushes crash details for an unexpectedly terminated server.
-  rpc ReportCrash(ReportCrashRequest) returns (ReportAck) {
+  rpc ReportCrash(ReportCrashRequest) returns (ReportCrashResponse) {
     option (google.api.http) = {
       post: "/v1/panel/reports/crashes"
       body: "*"
     };
   }
-}
-
-// ReportAck confirms that the panel received and handled a report.
-message ReportAck {
-  reserved 100 to 199;
-
-  // ack_id is the panel-generated identifier for the persisted report.
-  string ack_id = 1;
-  // received_at records when the panel accepted the report.
-  google.protobuf.Timestamp received_at = 2;
-  // error contains the reason the report could not be accepted when applicable.
-  drelyx.common.v1.Error error = 3;
 }
 
 // ReportMetricsRequest carries one metrics sample from an agent to the panel.
@@ -63,6 +51,18 @@ message ReportMetricsRequest {
   drelyx.common.v1.ResourceUsage usage = 5;
 }
 
+// ReportMetricsResponse confirms that a metrics report was accepted.
+message ReportMetricsResponse {
+  reserved 100 to 199;
+
+  // ack_id is the panel-generated identifier for the persisted report.
+  string ack_id = 1;
+  // received_at records when the panel accepted the report.
+  google.protobuf.Timestamp received_at = 2;
+  // error contains the reason the report could not be accepted when applicable.
+  drelyx.common.v1.Error error = 3;
+}
+
 // ReportEventRequest carries a structured server event from an agent to the panel.
 message ReportEventRequest {
   reserved 100 to 199;
@@ -73,6 +73,18 @@ message ReportEventRequest {
   PanelEvent event = 2;
 }
 
+// ReportEventResponse confirms that an event report was accepted.
+message ReportEventResponse {
+  reserved 100 to 199;
+
+  // ack_id is the panel-generated identifier for the persisted event.
+  string ack_id = 1;
+  // received_at records when the panel accepted the report.
+  google.protobuf.Timestamp received_at = 2;
+  // error contains the reason the report could not be accepted when applicable.
+  drelyx.common.v1.Error error = 3;
+}
+
 // ReportCrashRequest carries crash details for a server that exited unexpectedly.
 message ReportCrashRequest {
   reserved 100 to 199;
@@ -81,6 +93,18 @@ message ReportCrashRequest {
   drelyx.common.v1.AgentInfo agent = 1;
   // crash contains structured crash metadata and recent log context.
   CrashReport crash = 2;
+}
+
+// ReportCrashResponse confirms that a crash report was accepted.
+message ReportCrashResponse {
+  reserved 100 to 199;
+
+  // ack_id is the panel-generated identifier for the persisted crash report.
+  string ack_id = 1;
+  // received_at records when the panel accepted the report.
+  google.protobuf.Timestamp received_at = 2;
+  // error contains the reason the report could not be accepted when applicable.
+  drelyx.common.v1.Error error = 3;
 }
 
 // PanelEvent is a normalized event envelope sent from agents to the panel.
